@@ -8,7 +8,6 @@ use futuretek\datamapper\attributes\MapType;
 use Psr\Http\Message\UploadedFileInterface;
 use ReflectionClass;
 use ReflectionNamedType;
-use SplFileInfo;
 use futuretek\datamapper\attributes\Format;
 use futuretek\datamapper\attributes\ArrayType;
 
@@ -195,7 +194,7 @@ final class DataMapper
             }
 
             // Files
-            if ($value instanceof SplFileInfo || $value instanceof UploadedFileInterface) {
+            if ($value instanceof \SplFileObject || $value instanceof UploadedFileInterface) {
                 $result[$name] = $value;
                 continue;
             }

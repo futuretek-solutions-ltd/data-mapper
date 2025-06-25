@@ -51,7 +51,7 @@ class AllTypesDto
     public TestObject $nestedObject;
 
     // === Files ===
-    public \SplFileInfo $file;
+    public \SplFileObject $file;
 
     public UploadedFileInterface $uploadedFile;
 

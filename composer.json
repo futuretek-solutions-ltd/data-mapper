@@ -1,6 +1,6 @@
 {
     "name": "futuretek/data-mapper",
-    "description": "Cute data mapper",
+    "description": "A lightweight, reflection-based PHP 8.1+ data mapping library for converting associative arrays into typed PHP objects (POPOs), and back. Ideal for OpenAPI-generated DTOs, form handling, and request/response serialization in modern API architectures.",
     "keywords": [
         "data mapper",
         "cute"

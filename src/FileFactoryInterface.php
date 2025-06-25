@@ -28,7 +28,7 @@ interface FileFactoryInterface
      * }
      * ```
      *
-     * @param mixed $resource The file resource, can be a string (file path), SplFileInfo, or other resource types.
+     * @param mixed $resource The file resource, can be a string (file path), SplFileObject, or other resource types.
      * @return UploadedFileInterface
      */
     public function createFromResource(mixed $resource): UploadedFileInterface;
