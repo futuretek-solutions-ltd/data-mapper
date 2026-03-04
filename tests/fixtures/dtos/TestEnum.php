@@ -1,6 +1,6 @@
 <?php
 
-namespace futuretek\datamapper\tests\fixtures;
+namespace futuretek\datamapper\tests\fixtures\dtos;
 
 enum TestEnum: string {
     case A = 'a';

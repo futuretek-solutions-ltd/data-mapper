@@ -1,6 +1,6 @@
 <?php
 
-namespace futuretek\datamapper\tests\fixtures;
+namespace futuretek\datamapper\tests\fixtures\dtos;
 
 use futuretek\datamapper\attributes\ArrayType;
 use futuretek\datamapper\attributes\Format;
@@ -55,7 +55,7 @@ class AllTypesDto
 
     public UploadedFileInterface $uploadedFile;
 
-    // === Other PHP 8.1+ types ===
+    // === Other PHP 8.4+ types ===
     public mixed $mixedValue;
     public iterable $iterableValue;
     public object $objectValue;

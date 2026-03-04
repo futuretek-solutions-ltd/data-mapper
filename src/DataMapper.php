@@ -86,7 +86,7 @@ final class DataMapper
             // ArrayType
             if ($typeName === 'array') {
                 $arrayTypeAttr = $property->getAttributes(ArrayType::class)[0] ?? null;
-                if ($arrayTypeAttr) {
+                if ($arrayTypeAttr && is_array($value)) {
                     $itemClass = $arrayTypeAttr->newInstance()->of;
                     $mapped = array_map(function ($item) use ($itemClass) {
                         if (class_exists($itemClass)) {
@@ -132,6 +132,10 @@ final class DataMapper
 
             // Enum
             if (enum_exists($typeName)) {
+                if ($value === null && $nullable) {
+                    $property->setValue($object, null);
+                    continue;
+                }
                 $enum = $typeName::tryFrom($value);
                 if (!$enum) {
                     throw new \UnexpectedValueException("Invalid enum value '$value' for $typeName::$name");
@@ -176,6 +180,11 @@ final class DataMapper
             }
 
             $name = $property->getName();
+
+            if (!$property->isInitialized($object)) {
+                continue;
+            }
+
             $value = $property->getValue($object);
 
             if ($value === null) {
