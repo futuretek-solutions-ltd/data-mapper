@@ -931,4 +931,64 @@ test('toArray with deeply nested objects', function () {
     expect($output['level1']['child'])->toBe(['label' => 'deep', 'count' => 3]);
 });
 
+// ============================================================
+// toArray with array of objects
+// ============================================================
+
+test('toArray converts array of objects to array of arrays', function () {
+    $obj1 = DataMapper::toObject(['name' => 'Alice', 'age' => 30], ScalarDto::class);
+    $obj2 = DataMapper::toObject(['name' => 'Bob', 'age' => 25], ScalarDto::class);
+
+    $output = DataMapper::toArray([$obj1, $obj2]);
+
+    expect($output)->toBeArray();
+    expect($output)->toHaveCount(2);
+    expect($output[0])->toBe(['name' => 'Alice', 'age' => 30, 'nickname' => null, 'score' => null]);
+    expect($output[1])->toBe(['name' => 'Bob', 'age' => 25, 'nickname' => null, 'score' => null]);
+});
+
+test('toArray converts empty array to empty array', function () {
+    $output = DataMapper::toArray([]);
+
+    expect($output)->toBeArray();
+    expect($output)->toBeEmpty();
+});
+
+test('toArray converts single-element array of objects', function () {
+    $obj = DataMapper::toObject(['label' => 'only', 'count' => 1], TestObject::class);
+
+    $output = DataMapper::toArray([$obj]);
+
+    expect($output)->toHaveCount(1);
+    expect($output[0])->toBe(['label' => 'only', 'count' => 1]);
+});
+
+test('toArray with array of nested objects', function () {
+    $obj1 = DataMapper::toObject([
+        'title' => 'Parent1',
+        'child' => ['label' => 'child1', 'count' => 1],
+    ], NestedDto::class);
+    $obj2 = DataMapper::toObject([
+        'title' => 'Parent2',
+        'child' => ['label' => 'child2', 'count' => 2],
+    ], NestedDto::class);
+
+    $output = DataMapper::toArray([$obj1, $obj2]);
+
+    expect($output)->toHaveCount(2);
+    expect($output[0]['child'])->toBe(['label' => 'child1', 'count' => 1]);
+    expect($output[1]['child'])->toBe(['label' => 'child2', 'count' => 2]);
+});
+
+test('toArray preserves string keys in input array', function () {
+    $obj1 = DataMapper::toObject(['label' => 'first', 'count' => 1], TestObject::class);
+    $obj2 = DataMapper::toObject(['label' => 'second', 'count' => 2], TestObject::class);
+
+    $output = DataMapper::toArray(['a' => $obj1, 'b' => $obj2]);
+
+    expect($output)->toHaveKeys(['a', 'b']);
+    expect($output['a'])->toBe(['label' => 'first', 'count' => 1]);
+    expect($output['b'])->toBe(['label' => 'second', 'count' => 2]);
+});
+
 

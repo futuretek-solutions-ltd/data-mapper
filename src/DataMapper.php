@@ -164,13 +164,20 @@ final class DataMapper
     }
 
     /**
-     * Convert a typed object into an associative array.
+     * Convert a typed object (or an array of typed objects) into an associative array.
      *
-     * @param object $object
+     * @param object|array<object> $object
      * @return array
      */
-    public static function toArray(object $object): array
+    public static function toArray(object|array $object): array
     {
+        if (is_array($object)) {
+            return array_map(
+                fn($item) => is_object($item) ? self::toArray($item) : $item,
+                $object
+            );
+        }
+
         $refClass = new ReflectionClass($object);
         $result = [];
 
