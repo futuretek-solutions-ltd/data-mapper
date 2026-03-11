@@ -71,14 +71,19 @@ final class DataMapper
 
             $value = $data[$name];
 
-            // Format: date or date-time
+            // Format: date or date-time (or any DateTimeInterface property)
             $formatAttr = $property->getAttributes(Format::class)[0] ?? null;
-            if ($formatAttr && is_string($value)) {
-                $format = $formatAttr->newInstance()->type;
-                $parsed = DateTimeImmutable::createFromFormat(
-                    $format === 'date' ? 'Y-m-d' : DateTimeInterface::ATOM,
-                    $value
-                ) ?: null;
+            $isDateTimeType = $typeName === DateTimeInterface::class
+                || $typeName === DateTimeImmutable::class
+                || $typeName === \DateTime::class
+                || is_subclass_of($typeName, DateTimeInterface::class);
+
+            if (($formatAttr || $isDateTimeType) && is_string($value)) {
+                try {
+                    $parsed = new DateTimeImmutable($value);
+                } catch (\Exception) {
+                    $parsed = null;
+                }
                 $property->setValue($object, $parsed);
                 continue;
             }

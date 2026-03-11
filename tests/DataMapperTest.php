@@ -195,6 +195,63 @@ test('toArray defaults to date-time format when no Format attribute', function (
     expect($output['createdAt'])->toBe('2024-01-01T12:00:00+00:00');
 });
 
+test('toObject parses DateTimeInterface property without Format attribute', function () {
+    $dto = DataMapper::toObject([
+        'createdAt' => '2024-03-15T14:30:00+00:00',
+    ], DateNoFormatDto::class);
+
+    expect($dto->createdAt)->toBeInstanceOf(DateTimeImmutable::class);
+    expect($dto->createdAt->format('Y-m-d'))->toBe('2024-03-15');
+});
+
+test('toObject accepts various datetime string formats', function (string $input, string $expectedDate) {
+    $dto = DataMapper::toObject(['createdAt' => $input], DateNoFormatDto::class);
+
+    expect($dto->createdAt)->toBeInstanceOf(DateTimeImmutable::class);
+    expect($dto->createdAt->format('Y-m-d'))->toBe($expectedDate);
+})->with([
+    'ISO 8601 with timezone' => ['2024-06-15T10:30:00+02:00', '2024-06-15'],
+    'ISO 8601 UTC (Z)' => ['2024-06-15T10:30:00Z', '2024-06-15'],
+    'date only' => ['2024-06-15', '2024-06-15'],
+    'datetime without timezone' => ['2024-06-15 10:30:00', '2024-06-15'],
+    'US style' => ['06/15/2024', '2024-06-15'],
+    'relative today' => ['today', (new DateTimeImmutable('today'))->format('Y-m-d')],
+    'relative tomorrow' => ['tomorrow', (new DateTimeImmutable('tomorrow'))->format('Y-m-d')],
+    'relative yesterday' => ['yesterday', (new DateTimeImmutable('yesterday'))->format('Y-m-d')],
+    'textual month' => ['15 June 2024', '2024-06-15'],
+    'textual month short' => ['15 Jun 2024', '2024-06-15'],
+    'RFC 2822' => ['Sat, 15 Jun 2024 10:30:00 +0000', '2024-06-15'],
+    'year-month only' => ['2024-06', '2024-06-01'],
+    'datetime with microseconds' => ['2024-06-15T10:30:00.123456+00:00', '2024-06-15'],
+]);
+
+test('toObject accepts various datetime formats with Format attribute', function (string $input, string $expectedDate) {
+    $dto = DataMapper::toObject([
+        'dateOnly' => $input,
+        'dateTime' => $input,
+    ], DateDto::class);
+
+    expect($dto->dateOnly)->toBeInstanceOf(DateTimeImmutable::class);
+    expect($dto->dateOnly->format('Y-m-d'))->toBe($expectedDate);
+    expect($dto->dateTime)->toBeInstanceOf(DateTimeImmutable::class);
+    expect($dto->dateTime->format('Y-m-d'))->toBe($expectedDate);
+})->with([
+    'ISO 8601' => ['2024-06-15T10:30:00+00:00', '2024-06-15'],
+    'date only' => ['2024-06-15', '2024-06-15'],
+    'datetime space-separated' => ['2024-06-15 10:30:00', '2024-06-15'],
+    'textual month' => ['15 June 2024', '2024-06-15'],
+]);
+
+test('toObject sets null for completely invalid datetime string', function () {
+    $dto = DataMapper::toObject([
+        'dateOnly' => 'not-a-date-at-all',
+        'dateTime' => '!!!invalid!!!',
+    ], NullableDateDto::class);
+
+    expect($dto->dateOnly)->toBeNull();
+    expect($dto->dateTime)->toBeNull();
+});
+
 // ============================================================
 // Enums
 // ============================================================
