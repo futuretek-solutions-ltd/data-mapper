@@ -255,7 +255,11 @@ final class DataMapper
 
             // Object
             if (is_object($value)) {
-                $result[$name] = json_decode(json_encode($value), true) ?? [];
+                // stdClass stores properties dynamically; reflection returns nothing for it.
+                // Cast to array to preserve all key/value pairs at this level.
+                $result[$name] = $value instanceof \stdClass
+                    ? (array) $value
+                    : self::toArray($value);
                 continue;
             }
 

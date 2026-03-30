@@ -4,10 +4,13 @@ use futuretek\datamapper\DataMapper;
 use futuretek\datamapper\tests\classes\TestFile;
 use futuretek\datamapper\tests\classes\TestFileFactory;
 use futuretek\datamapper\tests\fixtures\dtos\AllTypesDto;
+use futuretek\datamapper\tests\fixtures\dtos\ArrayDateDto;
 use futuretek\datamapper\tests\fixtures\dtos\ArrayDto;
 use futuretek\datamapper\tests\fixtures\dtos\BooleanEdgeCaseDto;
 use futuretek\datamapper\tests\fixtures\dtos\DateDto;
 use futuretek\datamapper\tests\fixtures\dtos\DateNoFormatDto;
+use futuretek\datamapper\tests\fixtures\dtos\DateTimeImmutableDto;
+use futuretek\datamapper\tests\fixtures\dtos\DateTimeMutableDto;
 use futuretek\datamapper\tests\fixtures\dtos\DeepNestedDto;
 use futuretek\datamapper\tests\fixtures\dtos\EmptyDto;
 use futuretek\datamapper\tests\fixtures\dtos\EnumDto;
@@ -16,6 +19,7 @@ use futuretek\datamapper\tests\fixtures\dtos\FloatEdgeCaseDto;
 use futuretek\datamapper\tests\fixtures\dtos\MapDto;
 use futuretek\datamapper\tests\fixtures\dtos\MixedTypesDto;
 use futuretek\datamapper\tests\fixtures\dtos\MultiReadonlyDto;
+use futuretek\datamapper\tests\fixtures\dtos\NestedDateDto;
 use futuretek\datamapper\tests\fixtures\dtos\NestedDto;
 use futuretek\datamapper\tests\fixtures\dtos\NullableArrayDto;
 use futuretek\datamapper\tests\fixtures\dtos\NullableDateDto;
@@ -1048,4 +1052,295 @@ test('toArray preserves string keys in input array', function () {
     expect($output['b'])->toBe(['label' => 'second', 'count' => 2]);
 });
 
+// ============================================================
+// DateTime Type Variants
+// ============================================================
 
+test('toObject parses DateTimeImmutable-typed property with Format attribute', function () {
+    $dto = DataMapper::toObject([
+        'dateOnly' => '2024-06-15',
+        'dateTime' => '2024-06-15T12:00:00+00:00',
+        'noFormat' => '2024-06-15T08:30:00+00:00',
+    ], DateTimeImmutableDto::class);
+
+    expect($dto->dateOnly)->toBeInstanceOf(DateTimeImmutable::class);
+    expect($dto->dateOnly->format('Y-m-d'))->toBe('2024-06-15');
+    expect($dto->dateTime)->toBeInstanceOf(DateTimeImmutable::class);
+    expect($dto->dateTime->format('Y-m-d\TH:i:sP'))->toBe('2024-06-15T12:00:00+00:00');
+});
+
+test('toObject parses DateTimeImmutable-typed property without Format attribute', function () {
+    $dto = DataMapper::toObject([
+        'dateOnly' => '2024-09-01',
+        'dateTime' => '2024-09-01T00:00:00+00:00',
+        'noFormat' => '2024-09-01T18:45:00+00:00',
+    ], DateTimeImmutableDto::class);
+
+    expect($dto->noFormat)->toBeInstanceOf(DateTimeImmutable::class);
+    expect($dto->noFormat->format('Y-m-d'))->toBe('2024-09-01');
+});
+
+test('DateTimeImmutable typed property round-trip preserves date and format', function () {
+    $input = [
+        'dateOnly' => '2024-11-05',
+        'dateTime' => '2024-11-05T09:15:00+00:00',
+        'noFormat' => '2024-11-05T09:15:00+00:00',
+    ];
+    $dto = DataMapper::toObject($input, DateTimeImmutableDto::class);
+    $output = DataMapper::toArray($dto);
+
+    expect($output['dateOnly'])->toBe('2024-11-05');
+    expect($output['dateTime'])->toBe('2024-11-05T09:15:00+00:00');
+    // noFormat has no Format attribute → defaults to date-time (ATOM)
+    expect($output['noFormat'])->toBe('2024-11-05T09:15:00+00:00');
+});
+
+test('toObject throws TypeError when DateTime-typed property receives DateTimeImmutable from parser', function () {
+    // The mapper always creates DateTimeImmutable internally.
+    // \DateTime typed properties are incompatible and trigger a PHP TypeError.
+    expect(fn() => DataMapper::toObject(['value' => '2024-06-15'], DateTimeMutableDto::class))
+        ->toThrow(Error::class);
+});
+
+// ============================================================
+// Pre-built Date Objects
+// ============================================================
+
+test('toObject assigns pre-built DateTimeImmutable directly when value is already an object', function () {
+    $existing = new DateTimeImmutable('2024-03-20T10:00:00+00:00');
+
+    // The code only parses when is_string($value); a non-string falls to scalar assignment.
+    $dto = DataMapper::toObject([
+        'dateOnly' => $existing,
+        'dateTime' => $existing,
+    ], DateDto::class);
+
+    expect($dto->dateOnly)->toBe($existing);
+    expect($dto->dateTime)->toBe($existing);
+});
+
+// ============================================================
+// Date Edge Cases
+// ============================================================
+
+test('toObject with empty string for date property silently creates current datetime', function () {
+    // DateTimeImmutable('') does not throw — it resolves to "now".
+    // This is a known footgun: an empty string is not treated as invalid.
+    $before = new DateTimeImmutable('now');
+    $dto = DataMapper::toObject(['dateOnly' => '', 'dateTime' => ''], NullableDateDto::class);
+    $after = new DateTimeImmutable('now');
+
+    expect($dto->dateOnly)->toBeInstanceOf(DateTimeImmutable::class);
+    expect($dto->dateOnly->getTimestamp())->toBeGreaterThanOrEqual($before->getTimestamp());
+    expect($dto->dateOnly->getTimestamp())->toBeLessThanOrEqual($after->getTimestamp());
+});
+
+test('toArray preserves non-UTC timezone offset in date-time serialization', function () {
+    $dto = DataMapper::toObject([
+        'dateOnly' => '2024-06-01',
+        'dateTime' => '2024-06-01T12:00:00+05:30',
+    ], DateDto::class);
+    $output = DataMapper::toArray($dto);
+
+    // ATOM format must keep the original offset
+    expect($output['dateTime'])->toBe('2024-06-01T12:00:00+05:30');
+    // date-only format is always timezone-independent
+    expect($output['dateOnly'])->toBe('2024-06-01');
+});
+
+test('toArray nullable date with non-null values round-trips correctly', function () {
+    $input = [
+        'dateOnly' => '2025-01-15',
+        'dateTime' => '2025-01-15T08:00:00+00:00',
+    ];
+    $dto = DataMapper::toObject($input, NullableDateDto::class);
+    $output = DataMapper::toArray($dto);
+
+    expect($output['dateOnly'])->toBe('2025-01-15');
+    expect($output['dateTime'])->toBe('2025-01-15T08:00:00+00:00');
+});
+
+test('toArray formats nullable date fields correctly when values are set', function () {
+    $dto = new NullableDateDto();
+    $dto->dateOnly = new DateTimeImmutable('2024-07-04');
+    $dto->dateTime = new DateTimeImmutable('2024-07-04T20:30:00+02:00');
+
+    $output = DataMapper::toArray($dto);
+
+    expect($output['dateOnly'])->toBe('2024-07-04');
+    expect($output['dateTime'])->toBe('2024-07-04T20:30:00+02:00');
+});
+
+test('toArray date format produces Y-m-d and date-time format produces ATOM string', function () {
+    $dto = DataMapper::toObject([
+        'dateOnly' => '2024-02-29',        // leap year
+        'dateTime' => '2024-02-29T23:59:59+00:00',
+    ], DateDto::class);
+    $output = DataMapper::toArray($dto);
+
+    // date → Y-m-d only, no time component
+    expect($output['dateOnly'])->toMatch('/^\d{4}-\d{2}-\d{2}$/');
+    // date-time → ATOM with time and timezone
+    expect($output['dateTime'])->toMatch('/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}[+-]\d{2}:\d{2}$/');
+});
+
+// ============================================================
+// toArray Object Fix — Nested DTO with Dates
+// ============================================================
+
+test('toArray recurses into typed nested DTO containing date fields', function () {
+    $dto = DataMapper::toObject([
+        'name' => 'parent',
+        'child' => [
+            'dateOnly' => '2024-03-15',
+            'dateTime' => '2024-03-15T10:00:00+00:00',
+        ],
+    ], NestedDateDto::class);
+
+    $output = DataMapper::toArray($dto);
+
+    // Without the // Object fix, $output['child'] would be the raw DateDto object.
+    expect($output['child'])->toBeArray();
+    expect($output['child']['dateOnly'])->toBe('2024-03-15');
+    expect($output['child']['dateTime'])->toBe('2024-03-15T10:00:00+00:00');
+});
+
+test('nested date DTO round-trip preserves all date values', function () {
+    $input = [
+        'name' => 'event',
+        'child' => [
+            'dateOnly' => '2024-12-31',
+            'dateTime' => '2024-12-31T23:59:59+00:00',
+        ],
+    ];
+    $dto = DataMapper::toObject($input, NestedDateDto::class);
+    $output = DataMapper::toArray($dto);
+
+    expect($output['name'])->toBe('event');
+    expect($output['child']['dateOnly'])->toBe('2024-12-31');
+    expect($output['child']['dateTime'])->toBe('2024-12-31T23:59:59+00:00');
+});
+
+test('toArray outputs null for optional nested DTO that is null', function () {
+    $dto = DataMapper::toObject([
+        'name' => 'no-optional',
+        'child' => [
+            'dateOnly' => '2024-01-01',
+            'dateTime' => '2024-01-01T00:00:00+00:00',
+        ],
+        'optionalChild' => null,
+    ], NestedDateDto::class);
+
+    $output = DataMapper::toArray($dto);
+
+    expect($output)->toHaveKey('optionalChild');
+    expect($output['optionalChild'])->toBeNull();
+});
+
+test('toArray correctly serializes optional nested DTO when present', function () {
+    $dto = DataMapper::toObject([
+        'name' => 'with-optional',
+        'child' => [
+            'dateOnly' => '2024-05-01',
+            'dateTime' => '2024-05-01T06:00:00+00:00',
+        ],
+        'optionalChild' => [
+            'dateOnly' => '2024-05-02',
+            'dateTime' => '2024-05-02T07:00:00+00:00',
+        ],
+    ], NestedDateDto::class);
+
+    $output = DataMapper::toArray($dto);
+
+    expect($output['optionalChild'])->toBeArray();
+    expect($output['optionalChild']['dateOnly'])->toBe('2024-05-02');
+    expect($output['optionalChild']['dateTime'])->toBe('2024-05-02T07:00:00+00:00');
+});
+
+test('toArray nested DTO with nullable date fields outputs null for unset dates', function () {
+    // NullableDateDto has nullable date fields defaulting to null
+    $dto = DataMapper::toObject([
+        'name' => 'sparse',
+        'child' => [
+            'dateOnly' => '2024-08-20',
+            'dateTime' => '2024-08-20T12:00:00+00:00',
+        ],
+        'optionalChild' => [
+            'dateOnly' => null,
+            'dateTime' => null,
+        ],
+    ], NestedDateDto::class);
+
+    $output = DataMapper::toArray($dto);
+
+    expect($output['optionalChild'])->toBeArray();
+    expect($output['optionalChild']['dateOnly'])->toBeNull();
+    expect($output['optionalChild']['dateTime'])->toBeNull();
+});
+
+// ============================================================
+// toArray Object Fix — Arrays of DTOs with Dates
+// ============================================================
+
+test('ArrayDateDto round-trip serializes dates in all array items', function () {
+    $input = [
+        'items' => [
+            ['dateOnly' => '2024-01-01', 'dateTime' => '2024-01-01T00:00:00+00:00'],
+            ['dateOnly' => '2024-06-15', 'dateTime' => '2024-06-15T12:30:00+00:00'],
+            ['dateOnly' => '2024-12-31', 'dateTime' => '2024-12-31T23:59:59+00:00'],
+        ],
+    ];
+    $dto = DataMapper::toObject($input, ArrayDateDto::class);
+
+    expect($dto->items[0])->toBeInstanceOf(DateDto::class);
+    expect($dto->items[1])->toBeInstanceOf(DateDto::class);
+    expect($dto->items[2])->toBeInstanceOf(DateDto::class);
+
+    $output = DataMapper::toArray($dto);
+
+    expect($output['items'])->toHaveCount(3);
+    expect($output['items'][0]['dateOnly'])->toBe('2024-01-01');
+    expect($output['items'][1]['dateTime'])->toBe('2024-06-15T12:30:00+00:00');
+    expect($output['items'][2]['dateOnly'])->toBe('2024-12-31');
+});
+
+test('toArray on array of DTOs containing dates formats dates in each item', function () {
+    $dto1 = DataMapper::toObject([
+        'dateOnly' => '2024-03-01',
+        'dateTime' => '2024-03-01T08:00:00+00:00',
+    ], DateDto::class);
+    $dto2 = DataMapper::toObject([
+        'dateOnly' => '2024-03-02',
+        'dateTime' => '2024-03-02T09:00:00+00:00',
+    ], DateDto::class);
+
+    $output = DataMapper::toArray([$dto1, $dto2]);
+
+    expect($output)->toHaveCount(2);
+    expect($output[0]['dateOnly'])->toBe('2024-03-01');
+    expect($output[0]['dateTime'])->toBe('2024-03-01T08:00:00+00:00');
+    expect($output[1]['dateOnly'])->toBe('2024-03-02');
+    expect($output[1]['dateTime'])->toBe('2024-03-02T09:00:00+00:00');
+});
+
+test('ArrayDateDto with single item round-trips correctly', function () {
+    $input = [
+        'items' => [
+            ['dateOnly' => '2024-07-04', 'dateTime' => '2024-07-04T16:00:00-04:00'],
+        ],
+    ];
+    $dto = DataMapper::toObject($input, ArrayDateDto::class);
+    $output = DataMapper::toArray($dto);
+
+    expect($output['items'])->toHaveCount(1);
+    expect($output['items'][0]['dateOnly'])->toBe('2024-07-04');
+    // Negative UTC offset must survive the round-trip
+    expect($output['items'][0]['dateTime'])->toBe('2024-07-04T16:00:00-04:00');
+});
+
+test('ArrayDateDto with empty items array round-trips to empty array', function () {
+    $dto = DataMapper::toObject(['items' => []], ArrayDateDto::class);
+    $output = DataMapper::toArray($dto);
+
+    expect($output['items'])->toBe([]);
+});
