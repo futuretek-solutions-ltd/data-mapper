@@ -92,13 +92,35 @@ final class DataMapper
             if ($typeName === 'array') {
                 $arrayTypeAttr = $property->getAttributes(ArrayType::class)[0] ?? null;
                 if ($arrayTypeAttr && is_array($value)) {
-                    $itemClass = $arrayTypeAttr->newInstance()->of;
-                    $mapped = array_map(function ($item) use ($itemClass) {
-                        if (class_exists($itemClass)) {
-                            return self::toObject($item, $itemClass);
-                        }
-                        return $item;
-                    }, $value);
+                    $arrayType = $arrayTypeAttr->newInstance();
+                    $itemClass = $arrayType->of;
+                    $itemFormat = $arrayType->format;
+
+                    $isDateTimeItem = $itemClass === DateTimeInterface::class
+                        || $itemClass === DateTimeImmutable::class
+                        || $itemClass === \DateTime::class
+                        || (class_exists($itemClass) && is_subclass_of($itemClass, DateTimeInterface::class));
+
+                    if ($isDateTimeItem && $itemFormat !== null) {
+                        $mapped = array_map(function ($item) {
+                            if ($item === null) {
+                                return null;
+                            }
+                            try {
+                                return new DateTimeImmutable($item);
+                            } catch (\Exception) {
+                                return null;
+                            }
+                        }, $value);
+                    } else {
+                        $mapped = array_map(function ($item) use ($itemClass) {
+                            if (class_exists($itemClass)) {
+                                return self::toObject($item, $itemClass);
+                            }
+                            return $item;
+                        }, $value);
+                    }
+
                     $property->setValue($object, $mapped);
                     continue;
                 }
@@ -230,10 +252,21 @@ final class DataMapper
             if (is_array($value)) {
                 $arrayTypeAttr = $property->getAttributes(ArrayType::class)[0] ?? null;
                 if ($arrayTypeAttr) {
-                    $result[$name] = array_map(
-                        fn($item) => is_object($item) ? self::toArray($item) : $item,
-                        $value
-                    );
+                    $arrayType = $arrayTypeAttr->newInstance();
+                    $itemFormat = $arrayType->format;
+
+                    if ($itemFormat !== null) {
+                        $phpFormat = $itemFormat === 'date' ? 'Y-m-d' : DateTimeInterface::ATOM;
+                        $result[$name] = array_map(
+                            fn($item) => $item instanceof DateTimeInterface ? $item->format($phpFormat) : $item,
+                            $value
+                        );
+                    } else {
+                        $result[$name] = array_map(
+                            fn($item) => is_object($item) ? self::toArray($item) : $item,
+                            $value
+                        );
+                    }
                     continue;
                 }
             }

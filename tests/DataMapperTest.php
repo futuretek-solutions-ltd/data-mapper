@@ -6,6 +6,7 @@ use futuretek\datamapper\tests\classes\TestFileFactory;
 use futuretek\datamapper\tests\fixtures\dtos\AllTypesDto;
 use futuretek\datamapper\tests\fixtures\dtos\ArrayDateDto;
 use futuretek\datamapper\tests\fixtures\dtos\ArrayDto;
+use futuretek\datamapper\tests\fixtures\dtos\ArrayStringDateDto;
 use futuretek\datamapper\tests\fixtures\dtos\BooleanEdgeCaseDto;
 use futuretek\datamapper\tests\fixtures\dtos\DateDto;
 use futuretek\datamapper\tests\fixtures\dtos\DateNoFormatDto;
@@ -1344,3 +1345,63 @@ test('ArrayDateDto with empty items array round-trips to empty array', function 
 
     expect($output['items'])->toBe([]);
 });
+
+// ============================================================
+// ArrayType with format — arrays of date / date-time strings
+// ============================================================
+
+test('toObject deserializes array of date strings into DateTimeImmutable instances', function () {
+    $input = ['holidays' => ['2022-12-24', '2022-12-25', '2022-12-26'], 'events' => []];
+    $dto = DataMapper::toObject($input, ArrayStringDateDto::class);
+
+    expect($dto->holidays)->toHaveCount(3);
+    expect($dto->holidays[0])->toBeInstanceOf(\DateTimeImmutable::class);
+    expect($dto->holidays[0]->format('Y-m-d'))->toBe('2022-12-24');
+    expect($dto->holidays[1]->format('Y-m-d'))->toBe('2022-12-25');
+    expect($dto->holidays[2]->format('Y-m-d'))->toBe('2022-12-26');
+});
+
+test('toObject deserializes array of date-time strings into DateTimeImmutable instances', function () {
+    $input = ['holidays' => [], 'events' => ['2025-06-17T15:00:00+00:00', '2025-12-31T23:59:59+00:00']];
+    $dto = DataMapper::toObject($input, ArrayStringDateDto::class);
+
+    expect($dto->events)->toHaveCount(2);
+    expect($dto->events[0])->toBeInstanceOf(\DateTimeImmutable::class);
+    expect($dto->events[0]->format('Y-m-d\TH:i:sP'))->toBe('2025-06-17T15:00:00+00:00');
+});
+
+test('toArray serializes DateTimeImmutable[] back to date strings', function () {
+    $input = ['holidays' => ['2022-12-24', '2023-01-01'], 'events' => []];
+    $dto = DataMapper::toObject($input, ArrayStringDateDto::class);
+    $output = DataMapper::toArray($dto);
+
+    expect($output['holidays'])->toBe(['2022-12-24', '2023-01-01']);
+});
+
+test('toArray serializes DateTimeImmutable[] back to date-time strings', function () {
+    $input = ['holidays' => [], 'events' => ['2025-06-17T15:00:00+00:00']];
+    $dto = DataMapper::toObject($input, ArrayStringDateDto::class);
+    $output = DataMapper::toArray($dto);
+
+    expect($output['events'])->toBe(['2025-06-17T15:00:00+00:00']);
+});
+
+test('ArrayStringDateDto full round-trip preserves all values', function () {
+    $input = [
+        'holidays' => ['2022-12-24', '2022-12-25'],
+        'events'   => ['2025-01-01T00:00:00+00:00', '2025-07-04T18:30:00+00:00'],
+    ];
+    $dto = DataMapper::toObject($input, ArrayStringDateDto::class);
+    $output = DataMapper::toArray($dto);
+
+    expect($output)->toBe($input);
+});
+
+test('ArrayStringDateDto with empty arrays round-trips to empty arrays', function () {
+    $dto = DataMapper::toObject(['holidays' => [], 'events' => []], ArrayStringDateDto::class);
+    $output = DataMapper::toArray($dto);
+
+    expect($output['holidays'])->toBe([]);
+    expect($output['events'])->toBe([]);
+});
+

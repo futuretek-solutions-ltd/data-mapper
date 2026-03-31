@@ -8,6 +8,7 @@ A lightweight PHP 8.4+ utility for mapping associative arrays to plain PHP objec
 - 📌 Declarative mapping via custom attributes
 - 📅 Handles date and datetime format conversions via `#[Format]`
 - 🗂️ Supports typed arrays of objects via `#[ArrayType]`
+- 📅 Supports arrays of date / date-time strings via `#[ArrayType(\DateTimeInterface::class, format: '...')]`
 - 🗺️ Supports associative maps via `#[MapType]`
 - 📁 Supports file mapping via `SplFileObject` and PSR-7 `UploadedFileInterface`
 - 🧩 Backed enum handling with `tryFrom`
@@ -44,6 +45,9 @@ class BlogPost
 
     #[ArrayType(Comment::class)]
     public array $comments;
+
+    #[ArrayType(\DateTimeInterface::class, format: 'date')]
+    public array $holidays;
 
     #[MapType(valueType: Tag::class)]
     public array $tags;
@@ -97,7 +101,7 @@ When converting back via `toArray`, a `DateTimeInterface` property without `#[Fo
 
 ### `#[ArrayType]`
 
-Declares the item type of an array property — supports both class names and scalar type names.
+Declares the item type of an array property — supports class names, scalar type names, and `DateTimeInterface` with a `format`.
 
 ```php
 #[ArrayType(Comment::class)]   // Array of objects — each item is recursively mapped
@@ -105,7 +109,17 @@ public array $comments;
 
 #[ArrayType('int')]            // Array of scalars — items are passed through as-is
 public array $scores;
+
+#[ArrayType(\DateTimeInterface::class, format: 'date')]
+public array $holidays;       // Array of "Y-m-d" strings ↔ DateTimeImmutable[]
+
+#[ArrayType(\DateTimeInterface::class, format: 'date-time')]
+public array $events;         // Array of ISO 8601 strings ↔ DateTimeImmutable[]
 ```
+
+When `format` is provided:
+- **`toObject`** — each string item is parsed into a `DateTimeImmutable`; an unparseable item becomes `null`.
+- **`toArray`** — each `DateTimeInterface` item is formatted back to a string (`Y-m-d` for `'date'`, ATOM for `'date-time'`).
 
 ### `#[MapType]`
 
@@ -125,8 +139,9 @@ public array $translations;
 |------|--------------------|--------------------|
 | `string`, `int`, `float`, `bool` | Assigned directly | Returned as-is |
 | Nullable (`?type`) | `null` values accepted; missing keys use default | `null` returned |
-| `DateTimeInterface` + `#[Format]` | Parsed from string via `createFromFormat` | Formatted to string |
-| `array` + `#[ArrayType]` | Items mapped recursively if class type | Items converted recursively |
+| `DateTimeInterface` + `#[Format]` | Parsed from string via `new DateTimeImmutable()` | Formatted to string |
+| `array` + `#[ArrayType(ClassName)]` | Items mapped recursively | Items converted recursively |
+| `array` + `#[ArrayType(\DateTimeInterface::class, format: 'date\|date-time')]` | Each string item parsed into `DateTimeImmutable` | Each item formatted back to string |
 | `array` + `#[MapType]` | Values mapped recursively if class type | Values converted recursively |
 | Backed `enum` | Resolved via `tryFrom()` | Serialized to backing value |
 | Nested class | Recursively mapped from sub-array | Recursively converted to sub-array |
