@@ -14,6 +14,7 @@ use futuretek\datamapper\tests\fixtures\dtos\DateTimeImmutableDto;
 use futuretek\datamapper\tests\fixtures\dtos\DateTimeMutableDto;
 use futuretek\datamapper\tests\fixtures\dtos\DeepNestedDto;
 use futuretek\datamapper\tests\fixtures\dtos\EmptyDto;
+use futuretek\datamapper\tests\fixtures\dtos\EnumArrayDto;
 use futuretek\datamapper\tests\fixtures\dtos\EnumDto;
 use futuretek\datamapper\tests\fixtures\dtos\FileDto;
 use futuretek\datamapper\tests\fixtures\dtos\FloatEdgeCaseDto;
@@ -280,6 +281,51 @@ test('enum round-trip preserves value', function () {
 
     expect($output['status'])->toBe('b');
     expect($output['optionalStatus'])->toBe('a');
+});
+
+// ============================================================
+// Enum arrays (ArrayType)
+// ============================================================
+
+test('maps array of enums with ArrayType', function () {
+    $dto = DataMapper::toObject(['statuses' => ['a', 'b', 'a']], EnumArrayDto::class);
+
+    expect($dto->statuses)->toBe([TestEnum::A, TestEnum::B, TestEnum::A]);
+});
+
+test('throws on invalid enum value inside ArrayType array', function () {
+    expect(fn() => DataMapper::toObject(['statuses' => ['a', 'z']], EnumArrayDto::class))
+        ->toThrow(UnexpectedValueException::class, "Invalid enum value 'z'");
+});
+
+test('maps null item inside ArrayType array of enums to null', function () {
+    $dto = DataMapper::toObject(['statuses' => ['a', null, 'b']], EnumArrayDto::class);
+
+    expect($dto->statuses)->toBe([TestEnum::A, null, TestEnum::B]);
+});
+
+test('toArray serializes ArrayType array of enums as plain scalar values', function () {
+    $dto = DataMapper::toObject(['statuses' => ['a', 'b']], EnumArrayDto::class);
+
+    $output = DataMapper::toArray($dto);
+
+    // Regression: DataMapper used to reflect each backed enum's public properties here,
+    // producing [['name' => 'A', 'value' => 'a'], ...] instead of ['a', 'b'].
+    expect($output['statuses'])->toBe(['a', 'b']);
+});
+
+test('array of enums round-trips through toObject and toArray unchanged', function () {
+    $input = ['statuses' => ['b', 'a'], 'optionalStatuses' => null];
+    $dto = DataMapper::toObject($input, EnumArrayDto::class);
+    $output = DataMapper::toArray($dto);
+
+    expect($output)->toBe($input);
+});
+
+test('toArray converts a top-level array of enum instances to scalar values', function () {
+    $output = DataMapper::toArray([TestEnum::A, TestEnum::B]);
+
+    expect($output)->toBe(['a', 'b']);
 });
 
 // ============================================================

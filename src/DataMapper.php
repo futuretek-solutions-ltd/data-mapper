@@ -112,6 +112,17 @@ final class DataMapper
                                 return null;
                             }
                         }, $value);
+                    } elseif (enum_exists($itemClass)) {
+                        $mapped = array_map(function ($item) use ($itemClass, $name) {
+                            if ($item === null) {
+                                return null;
+                            }
+                            $enum = $itemClass::tryFrom($item);
+                            if (!$enum) {
+                                throw new \UnexpectedValueException("Invalid enum value '$item' for $itemClass::$name");
+                            }
+                            return $enum;
+                        }, $value);
                     } else {
                         $mapped = array_map(function ($item) use ($itemClass) {
                             if (class_exists($itemClass)) {
@@ -200,7 +211,7 @@ final class DataMapper
     {
         if (is_array($object)) {
             return array_map(
-                fn($item) => is_object($item) ? self::toArray($item) : $item,
+                fn($item) => self::normalizeArrayItem($item),
                 $object
             );
         }
@@ -263,7 +274,7 @@ final class DataMapper
                         );
                     } else {
                         $result[$name] = array_map(
-                            fn($item) => is_object($item) ? self::toArray($item) : $item,
+                            fn($item) => self::normalizeArrayItem($item),
                             $value
                         );
                     }
@@ -301,5 +312,22 @@ final class DataMapper
         }
 
         return $result;
+    }
+
+    /**
+     * Converts a single array/map item for toArray(): a backed enum becomes its scalar value,
+     * any other object is recursively converted, and scalars pass through unchanged.
+     *
+     * Enums must be checked before the generic object branch - reflecting a backed enum's
+     * properties (as the generic object branch does) yields {"name": ..., "value": ...}
+     * instead of just the scalar value.
+     */
+    private static function normalizeArrayItem(mixed $item): mixed
+    {
+        if (is_object($item) && enum_exists(get_class($item))) {
+            return $item->value;
+        }
+
+        return is_object($item) ? self::toArray($item) : $item;
     }
 }
