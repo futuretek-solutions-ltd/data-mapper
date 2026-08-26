@@ -23,6 +23,7 @@ use futuretek\datamapper\tests\fixtures\dtos\MixedTypesDto;
 use futuretek\datamapper\tests\fixtures\dtos\MultiReadonlyDto;
 use futuretek\datamapper\tests\fixtures\dtos\NestedDateDto;
 use futuretek\datamapper\tests\fixtures\dtos\NestedDto;
+use futuretek\datamapper\tests\fixtures\dtos\NestedEnumArrayDto;
 use futuretek\datamapper\tests\fixtures\dtos\NullableArrayDto;
 use futuretek\datamapper\tests\fixtures\dtos\NullableDateDto;
 use futuretek\datamapper\tests\fixtures\dtos\ReadonlyDto;
@@ -326,6 +327,67 @@ test('toArray converts a top-level array of enum instances to scalar values', fu
     $output = DataMapper::toArray([TestEnum::A, TestEnum::B]);
 
     expect($output)->toBe(['a', 'b']);
+});
+
+// ============================================================
+// Enum arrays nested inside an ArrayType object array (regression)
+//
+// The flat, top-level EnumArrayDto tests above exercise the enum-array branch directly, but
+// never through the array-of-objects recursion path in toObject()'s ArrayType handling (the
+// `elseif (enum_exists($itemClass))` branch is only reached for the *item's own* properties once
+// self::toObject() recurses into it - a separate code path from mapping the outer array itself).
+// This mirrors the real shape that exposed the bug in production: an ArrayType array of plain
+// (non-enum) objects, where one of those nested objects itself declares an ArrayType array of
+// enums (fls.test's User.capabilities[].technologies). Before the fix, toObject() left the enum
+// array's items as raw strings (no enum_exists() check existed at all in that branch), so
+// downstream code assuming enum instances (e.g. `$item->value`) failed with
+// "Attempt to read property 'value' on string".
+// ============================================================
+
+test('maps enum array nested inside an ArrayType object array', function () {
+    $dto = DataMapper::toObject([
+        'items' => [
+            ['statuses' => ['a', 'b']],
+            ['statuses' => ['b']],
+        ],
+    ], NestedEnumArrayDto::class);
+
+    expect($dto->items)->toHaveCount(2);
+    expect($dto->items[0])->toBeInstanceOf(EnumArrayDto::class);
+    expect($dto->items[0]->statuses)->toBe([TestEnum::A, TestEnum::B]);
+    expect($dto->items[1]->statuses)->toBe([TestEnum::B]);
+
+    // The exact failure mode observed in production: accessing ->value on each item must work,
+    // i.e. every item really is an enum instance and not a plain string that merely looks right
+    // when printed.
+    foreach ($dto->items as $item) {
+        foreach ($item->statuses as $status) {
+            expect($status)->toBeInstanceOf(TestEnum::class);
+            expect(fn() => $status->value)->not->toThrow(\Throwable::class);
+        }
+    }
+});
+
+test('throws on invalid enum value inside a nested ArrayType object array', function () {
+    expect(fn() => DataMapper::toObject([
+        'items' => [
+            ['statuses' => ['a', 'not-a-valid-status']],
+        ],
+    ], NestedEnumArrayDto::class))->toThrow(UnexpectedValueException::class, "Invalid enum value 'not-a-valid-status'");
+});
+
+test('nested enum array round-trips through toObject and toArray as plain scalar values', function () {
+    $input = [
+        'items' => [
+            ['statuses' => ['a', 'b'], 'optionalStatuses' => null],
+        ],
+    ];
+    $dto = DataMapper::toObject($input, NestedEnumArrayDto::class);
+    $output = DataMapper::toArray($dto);
+
+    // Regression: without the fix, toArray() would reflect each backed enum's public properties
+    // here, producing [['name' => 'A', 'value' => 'a'], ...] instead of ['a', 'b'].
+    expect($output)->toBe($input);
 });
 
 // ============================================================
